@@ -1,0 +1,67 @@
+; Code for   HFC Televox Appointments
+	SELECT SR.*, PAL.*, *	;DISTINCT
+	  ;INTO TELVXHFC2 ;$1
+/*	HC_1 = "A",
+	HC_2 = "P",
+	APPT_DT = format(S.BEG_DT_TM ,"YYYYMMDD;;D"),
+	APPT_TM = format (S.BEG_DT_TM , "HHMMSS;;D"),
+	OFFICE_LOC = SUBSTRING (1, 16, UAR_GET_CODE_DISPLAY( S.APPT_LOCATION_CD )),
+	DRID = SUBSTRING (1, 4, PAL.ALIAS),
+	MRN = SUBSTRING (1, 16, PA.ALIAS),
+	LAST_NAME = SUBSTRING (1, 40, P.NAME_LAST),
+	FIRST_NAME = SUBSTRING (1,15, P.NAME_FIRST),
+	;PHONE = SUBSTRING ( 1,10, PH.PHONE_NUM),
+	PHONE = CNVTALPHANUM(SUBSTRING ( 1,13, PH.PHONE_NUM)),
+	S1.SCH_APPT_ID,
+	TE = substring(5,3,SE.appt_synonym_free)*/
+ 
+FROM	SCH_APPT  S,
+	SCH_APPT  S1,
+	PERSON  P,
+	PERSON_ALIAS  PA,
+	PHONE  PH,
+	SCH_RESOURCE  SR,
+	PRSNL_ALIAS  PAL,
+	SCH_EVENT  SE
+ 
+PLAN  S WHERE  S.BEG_DT_TM  BETWEEN
+ cnvtdatetime( curdate+1, 000000 ) AND ;+1
+ cnvtdatetime( curdate+1, 235959 )
+AND  S.SCH_STATE_CD IN (3582) AND
+ S.SCH_ROLE_CD IN
+(select code_value from code_value where code_set=14250
+and display_key in ("SJPNHFC*"))
+AND  S.APPT_LOCATION_CD IN
+( select code_value from code_value where code_set=220 and
+CDF_MEANING = "FACILITY"
+and display_key = "SJPNHFCEHR")
+ 
+JOIN  S1 WHERE  S1.SCH_EVENT_ID =  S.SCH_EVENT_ID AND
+ S1.SCH_STATE_CD IN (3582)
+AND  S1.SCH_ROLE_CD IN (3610)
+ 
+JOIN  P WHERE  P.PERSON_ID =  S1.PERSON_ID
+ 
+JOIN  PA WHERE  PA.PERSON_ID =  P.PERSON_ID
+and  PA.ALIAS_POOL_CD in (select code_value from code_value where
+code_set=263 and display_key= "SJHFMMMRN") AND  PA.ACTIVE_IND IN (1)
+ 
+JOIN  PH WHERE  PH.PARENT_ENTITY_ID = OUTERJOIN ( P.PERSON_ID)
+AND  PH.PHONE_TYPE_CD = OUTERJOIN (154)
+AND  PH.ACTIVE_IND = outerjoin (1)
+ 
+JOIN  SR WHERE  SR.RESOURCE_CD =  S.RESOURCE_CD
+ 
+JOIN  PAL WHERE  PAL.PERSON_ID =  SR.PERSON_ID
+ ;AND PAL.ALIAS_POOL_CD IN (select code_value from code_value where code_set = 263
+;and display_key = "SJHFMMPRVIDRID")
+and pal.active_ind = 1
+ 
+JOIN  SE  WHERE  SE.SCH_EVENT_ID =  S1.SCH_EVENT_ID
+ 
+ORDER BY	APPT_DT,
+	DRID,
+	LAST_NAME,
+	S1.SCH_APPT_ID,
+	0
+	

@@ -1,0 +1,451 @@
+/************************************************************************************
+Report Title:Immunization Rate - Children ages 19-35 months by PCP (not scheduled)
+Program Name: mhin_tl_imm_childfirst_pcppatient.prg
+Report Author: RobertsL
+Date Created: 11/05/09
+Updated: 11/05/09
+Version Number: 3
+Description:  This report looks at all PCP patients between the ages of 19 and 25 months.
+From that list, I am pulling the number of patients who have a 4:3:1:3:3:1 ratio of the following immunizations:
+DTP/DTaP, Polio, MMR, Hin, Hepatitis B, PCV, and Vericella.
+Percentage is calculated at end of report.
+; Key is "run"
+*************************************************************************************/
+ 
+drop program MHIN_IMM_TD_PCPPATIENT go
+create program MHIN_IMM_TD_PCPPATIENT
+ 
+prompt 
+	"Output to File/Printer/MINE" = "MINE"
+	, "Starting Age (in years):" = 18
+	, "Ending Age (in years):" = 85
+	;<<hidden>>"Enter Location Code to Populate PCP:" = 55555555
+	, "Select PCP:" = 0
+	, "TD" = 3
+	, "Key" = "" 
+
+with OUTDEV, BegMonth, EndMonth, PCP, TD, PCPKey
+; Key is "run"
+ 
+;Request HNAM sign-on when executed from CCL on host
+IF (VALIDATE(IsOdbc, 0) = 0)  EXECUTE CCLSECLOGIN  ENDIF
+ 
+SET MaxSecs = 0
+ 
+IF (VALIDATE(IsOdbc, 0) = 1)  SET MaxSecs = 90  ENDIF
+ 
+SET START_DT =  CNVTAGEDATETIME($BegMonth,0,0,0)
+SET END_DT = CNVTAGEDATETIME($EndMonth,0,0,0)
+SET PCPVAL = 0
+ 
+IF  ($PCPKey = "run")
+	SET PCPVAL = $PCP
+ENDIF
+ 
+ 
+ EXECUTE CCLSECLOGIN
+ 
+ 
+Declare num = I4
+ record PAT_IMM (
+    1 cnt = i4
+	1 PERSON_IMM [*]
+		2 PERSON_ID = vc
+    	2 LASTNAME = vc
+    	2 FIRSTNAME = vc
+    	2 MIDDLENAME = vc
+    	2 DOB =  c20
+    	2 SEX =  c40
+    	2 PCP = vc
+    	2 imm_cnt = i4
+     	2 imm [*]
+    		3 EVENT_ID = vc
+    		3 EVENT_CD = vc
+    		3 EVENT_CD_DISP = c40
+    		3 ENCNTR_ID = c20
+    		3 ADMIN_NOTE = c120
+    		3 ADMIN_START = c20
+) with persistscript
+ 
+ 
+ 
+SELECT DISTINCT INTO "nl:"
+	FROM
+	person p,
+	ce_med_result cmr,
+	PRSNL PRS,
+	PERSON_PRSNL_RELTN PPR,
+	PERSON P2, 
+	ENCNTR_ALIAS EA	
+	PLAN PPR
+		WHERE PPR.person_prsnl_r_cd = 875
+		AND PPR.prsnl_person_id = PCPVAL;$PCP;$PCP ;3189925 ;PRS.person_id   TESTING
+		AND PPR.active_ind = 1
+		AND PPR.end_effective_dt_tm = cnvtdatetime("31-DEC-2100 00:00:00")
+	JOIN P
+		WHERE P.PERSON_ID = PPR.prsnl_person_id
+	JOIN PRS
+		WHERE PRS.physician_ind = 1
+		AND P.person_id = PRS.person_id
+		AND PRS.active_ind = 1
+	JOIN P2
+		where p2.person_id = PPR.person_id
+		and p2.birth_dt_tm between CNVTDATETIME(END_DT) AND CNVTDATETIME(START_DT)
+		;cnvtdatetime(curdate-1050,0) and cnvtdatetime(curdate-570,2359)
+ORDER BY P2.person_id
+
+ Head report
+   pCnt = 0
+   iCnt = 0
+   cCnt = 0
+ HEAD P.person_id
+ pCnt = pCnt +1
+ PAT_IMM-> cnt = pCnt
+ 
+    if ( MOD( pcnt, _RS_GROW_SIZE ) = 1 )
+      stat = alterlist(PAT_IMM->PERSON_IMM, pCnt + _RS_GROW_SIZE )
+    endif
+    	PAT_IMM->PERSON_IMM[pCnt].PCP = substring(1,30,p.name_full_formatted)
+ 		PAT_IMM->PERSON_IMM[pCnt].PERSON_ID = TRIM(NULLVAL(CNVTSTRING(PA2.alias),CNVTSTRING(p2.person_id)))
+    	PAT_IMM->PERSON_IMM[pCnt].LASTNAME = TRIM(P2.name_last_key)
+    	PAT_IMM->PERSON_IMM[pCnt].FIRSTNAME = TRIM(P2.name_first_key)
+    	PAT_IMM->PERSON_IMM[pCnt].MIDDLENAME = TRIM(P2.name_middle_key)
+    	PAT_IMM->PERSON_IMM[pCnt].DOB =  format(P2.BIRTH_DT_TM ,"YYYYMMDD;;D")
+    	PAT_IMM->PERSON_IMM[pCnt].SEX =  TRIM(UAR_GET_CODE_DISPLAY(P2.sex_cd )
+    	PAT_IMM->PERSON_IMM[pCnt].SORT =  RAND(0)
+    	)
+
+ FOOT REPORT
+ 	stat = alterlist(PAT_IMM->PERSON_IMM, pCnt)
+ 
+with nocounter, separator=" ", format
+
+DECLARE i =  i4
+set i=0 ; to break out of detail
+ 
+
+    EVENT_ID = PAT_IMM->PERSON_IMM[i].imm[d1.seq].EVENT_ID,
+    EVENT_CD = PAT_IMM->PERSON_IMM[i].imm[d1.seq].EVENT_CD,
+    ENCNTR_ID = PAT_IMM->PERSON_IMM[i].imm[d1.seq].ENCNTR_ID,
+   ;Event Code Display in output? EVENT_CD_DISP = PAT_IMM->PERSON_IMM[i].imm[d1.seq].EVENT_CD,
+    ADMIN_NOTE = PAT_IMM->PERSON_IMM[i].imm[d1.seq].ADMIN_NOTE,
+    ADMIN_START = PAT_IMM->PERSON_IMM[i].imm[d1.seq].ADMIN_START,
+    ADMIN_END =  PAT_IMM->PERSON_IMM[i].imm[d1.seq].ADMIN_END,
+    SUB_EXPIRE_DT = PAT_IMM->PERSON_IMM[i].imm[d1.seq].SUB_EXPIRE_DT,
+    LOT_NBR = PAT_IMM->PERSON_IMM[i].imm[d1.seq].LOT_NBR,
+    MANUFAC_CD = PAT_IMM->PERSON_IMM[i].imm[d1.seq].MANUFAC_CD,
+    ;MANUFAC_CD = TRIM(UAR_GET_CODE_DISPLAY(CEM.SUBSTANCE_MANUFACTURER_CD),3),
+    MANUFAC_TXT = PAT_IMM->PERSON_IMM[i].imm[d1.seq].MANUFAC_TXT,
+    RESULT_STATUS_CD = PAT_IMM->PERSON_IMM[i].imm[d1.seq].RESULT_STATUS_CD,
+    ADMIN_DOSAGE = PAT_IMM->PERSON_IMM[i].imm[d1.seq].ADMIN_DOSAGE,
+    DOSAGE_UNIT_CD = PAT_IMM->PERSON_IMM[i].imm[d1.seq].DOSAGE_UNIT_CD,
+    VEI_ID = PAT_IMM->PERSON_IMM[i].imm[d1.seq].VEI_ID,
+    VEI_LNAME = PAT_IMM->PERSON_IMM[i].imm[d1.seq].VEI_LNAME,
+    VEI_FNAME = PAT_IMM->PERSON_IMM[i].imm[d1.seq].VEI_FNAME,
+    VEI_MNAME =	PAT_IMM->PERSON_IMM[i].imm[d1.seq].VEI_MNAME,
+    VEI_SUFFIX = PAT_IMM->PERSON_IMM[i].imm[d1.seq].VEI_SUFFIX,
+    VEI_PREFIX = PAT_IMM->PERSON_IMM[i].imm[d1.seq].VEI_PREFIX,
+    VEI_DEGREE = PAT_IMM->PERSON_IMM[i].imm[d1.seq].VEI_DEGREE,
+    OEI_ID = PAT_IMM->PERSON_IMM[i].imm[d1.seq].OEI_ID,
+    OEI_LNAME =	PAT_IMM->PERSON_IMM[i].imm[d1.seq].OEI_LNAME,
+    OEI_FNAME =	PAT_IMM->PERSON_IMM[i].imm[d1.seq].OEI_FNAME,
+    OEI_MNAME =	PAT_IMM->PERSON_IMM[i].imm[d1.seq].OEI_MNAME,
+    OEI_SUFFIX = PAT_IMM->PERSON_IMM[i].imm[d1.seq].OEI_SUFFIX,
+    OEI_PREFIX = PAT_IMM->PERSON_IMM[i].imm[d1.seq].OEI_PREFIX,
+    OEI_DEGREE = PAT_IMM->PERSON_IMM[i].imm[d1.seq].OEI_DEGREE,
+    SYS_DATE = PAT_IMM->PERSON_IMM[i].imm[d1.seq].SYS_DATE,
+    ;PAT_IMM->PERSON_IMM[pCnt].imm[iCnt].ADMIN_ADDR,
+    ORG_NAME = PAT_IMM->PERSON_IMM[i].imm[d1.seq].ORG_NAME,
+    ADMIN_ORG = PAT_IMM->PERSON_IMM[i].imm[d1.seq].ADMIN_ORG,
+    ADMIN_CITY = PAT_IMM->PERSON_IMM[i].imm[d1.seq].ADMIN_CITY,
+    ADMIN_STATE = PAT_IMM->PERSON_IMM[i].imm[d1.seq].ADMIN_STATE,
+    ADMIN_ADDR = PAT_IMM->PERSON_IMM[i].imm[d1.seq].ADMIN_ADDR,
+    ADMIN_ADDR2 = PAT_IMM->PERSON_IMM[i].imm[d1.seq].ADMIN_ADDR2,
+    ADMIN_ZIP = PAT_IMM->PERSON_IMM[i].imm[d1.seq].ADMIN_ZIP,
+    ADMIN_CD = PAT_IMM->PERSON_IMM[i].imm[d1.seq].RXA5ALIAS,; ""),
+    SUBMAN_NME =  PAT_IMM->PERSON_IMM[i].imm[d1.seq].RXA17ALIAS,; ""), ; code value alias
+    ACTION_CD =	PAT_IMM->PERSON_IMM[i].imm[d1.seq].RXA21ALIAS, ; code value alias
+    ROUTE = PAT_IMM->PERSON_IMM[i].imm[d1.seq].RXR1ALIAS,; "XXXX"), ; code value alias
+    ADMIN_SITE =  PAT_IMM->PERSON_IMM[i].imm[d1.seq].RXR2ALIAS;, "XXXX")
+ 
+	from (dummyt d1 with seq = VALUE(SIZE(PAT_IMM->PERSON_IMM[i].imm,5)))
+	plan d1
+ 
+   HEAD PERSON_ID
+ 
+          LINE1 = build(
+          "MSH|^~\&|MHIN|IN",ORG_NAME,"|CHIRP||",MSH_DT_TM,"||VXU^V04|",EVENT_ID,ENCNTR_ID,"||2.2|",
+          CR, "PID|1|", TRIM(PERSON_ID,3),"|", TRIM(CMRN,3),"^^^^MR||", TRIM(LASTNAME,3),"^",
+          TRIM(FIRSTNAME,3),"^", TRIM(MIDDLENAME,3),"||", TRIM(DOB,3),"|",
+          TRIM(SEX,3),"|||",TRIM(STREET_ADDR,3), "^",TRIM(STREET_ADDR2,3),"^",TRIM(CITY,3),
+          "^", TRIM(STATE,3), "^", TRIM(ZIPCODE,3),"||", TRIM(PHONE,3)
+          )
+ 
+          LINE1 = BUILD(TRIM(LINE1,3))
+ 
+	      LINE2 = "    "
+		  FINAL_TXN = "    "
+		  ADMIN_CD_DISP = "    "
+		  SUBMAN_NME_DISP = "    "
+		  ROUTE_DISP = "    "
+		  ACTION_CD_DISP = "    "
+		  ADMIN_SITE_DISP = "    "
+		  RXA9_INFSOURCE = "00"
+		  ;ADMIN_NOTE = fillstring(120, "")
+ 
+		  cRXA = 0
+ 
+    HEAD EVENT_ID
+ 
+		ADMIN_CD_DISP = IF (TRIM(ADMIN_CD)="") "" ELSE TRIM(ADMIN_CD) ENDIF
+ 		SUBMAN_NME_DISP = IF (TRIM(SUBMAN_NME)="") "" ELSE TRIM(SUBMAN_NME) ENDIF
+ 		ROUTE_DISP = IF (TRIM(ROUTE)="") "" ELSE TRIM(ROUTE) ENDIF
+ 		ADMIN_SITE_DISP = IF (TRIM(ADMIN_SITE)="") "" ELSE TRIM(ADMIN_SITE) ENDIF
+ 		ACTION_CD_DISP = IF (TRIM(ACTION_CD)="") "" ELSE TRIM(ACTION_CD) ENDIF
+ 		RXA9_INFSOURCE = IF (TRIM(OEI_FNAME) = "HISTORY") "01" ELSE "00" ENDIF
+ 
+      LINE2 = build(LINE2,
+      CR,"RXA|",cRXA,
+      "|",EVENT_ID,
+      "|",ADMIN_START,
+      "|",ADMIN_END,
+      "|", ADMIN_CD_DISP,;EVENT_CD
+      "^",
+      "^CVX|",ADMIN_DOSAGE,
+      "|",DOSAGE_UNIT_CD,
+      "||",RXA9_INFSOURCE ,"^",ADMIN_NOTE,
+      "|",VEI_ID,"^",VEI_LNAME,"^",VEI_FNAME,"^^^^","^^^^^^VEI^^~",;VEI_MNAME,
+      OEI_ID,"^",OEI_LNAME,"^",OEI_FNAME,"^",OEI_MNAME,"^^^","^^^^^^^OEI^^|",
+      "^^^",ADMIN_ORG,"^^^^^",ADMIN_ADDR,"^",ADMIN_ADDR2,"^",ADMIN_CITY,"^",ADMIN_STATE,"^",ADMIN_ZIP, ;RXA 11
+      "||||",LOT_NBR,
+      "|",SUB_EXPIRE_DT,
+      "|",
+      SUBMAN_NME_DISP,;MANUFAC_CD,
+      "^",
+      MANUFAC_TXT,
+      "^",
+      "MVX",
+      "||||",ACTION_CD_DISP,;RESULT_STATUS_CD,
+      "|",SYS_DATE,
+      "|",CR,
+      "RXR|", ROUTE_DISP, "|", ADMIN_SITE_DISP, "|||";,ROUTE, "|", ADMIN_SITE, "|||"
+      )
+ 
+ 
+    FOOT PERSON_ID
+ 
+    FINAL_TXN = TRIM(BUILD(LINE1, LINE2, CR,LF,CX))
+    TXN_SIZE = SIZE(FINAL_TXN)
+    COL 0  FINAL_TXN
+ 
+ 
+WITH  FORMFEED = NONE,MAXCOL=30000, MAXROW=1, time = 500;, MAXQUAL(CEM, 1)
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------------------
+-
+
+	from (dummyt d1 with seq = VALUE(SIZE(PAT_IMM->PERSON_IMM[i].imm,5)))
+	plan d1
+join ce
+where ce.person_id = p2.person_id
+and ce.event_tag != "In Error"
+and ce.view_level = 1
+and ce.valid_until_dt_tm = cnvtdatetime("31-DEC-2100 00:00:00")
+and ce.event_cd in (22392525) ;Adult TDAP
+/*
+or ce.person_id = p2.person_id
+and ce.event_tag != "In Error"
+and ce.view_level = 1
+and ce.valid_until_dt_tm = cnvtdatetime("31-DEC-2100 00:00:00")
+and ce.event_cd in(
+)
+*/ 
+join cmr
+where cmr.event_id = ce.event_id
+order by sort, name, p.person_id, cmr.event_id;sort, p.person_id, cmr.event_id
+
+
+	iCnt = 0
+ 
+ DETAIL
+ 		iCnt = iCnt +1
+ 		PAT_IMM->PERSON_IMM[pCnt].imm_cnt = iCnt
+ 			if ( MOD( iCnt, _RS_GROW_SIZE ) = 1 )
+     		 	stat = alterlist(PAT_IMM->PERSON_IMM[pCnt].imm, iCnt + _RS_GROW_SIZE )
+   			endif
+ 
+ 			; set values in array
+ 
+    	    PAT_IMM->PERSON_IMM[pCnt].imm[iCnt].EVENT_ID = TRIM(CNVTSTRING(CE.EVENT_ID))
+    		PAT_IMM->PERSON_IMM[pCnt].imm[iCnt].EVENT_CD = TRIM(CNVTSTRING(CE.EVENT_CD))
+    		PAT_IMM->PERSON_IMM[pCnt].imm[iCnt].EVENT_CD_DISP = TRIM(UAR_GET_CODE_DISPLAY(CE.EVENT_CD))
+    		PAT_IMM->PERSON_IMM[pCnt].imm[iCnt].ENCNTR_ID = TRIM(CNVTSTRING(CE.encntr_id))
+    		PAT_IMM->PERSON_IMM[pCnt].imm[iCnt].ADMIN_START = format(CEM.ADMIN_START_DT_TM ,"YYYYMMDDHHMMSS;;D")
+    		PAT_IMM->PERSON_IMM[pCnt].imm[iCnt].PCP = substring(1,30,p.name_full_formatted)
+ 		
+ FOOT p.person_id
+ 	stat = alterlist( PAT_IMM->PERSON_IMM[pCnt].imm, iCnt)
+ 
+ 
+ FOOT REPORT
+ 	stat = alterlist(PAT_IMM->PERSON_IMM, pCnt)
+ 
+with OUTERJOIN = D2, nocounter, separator=" ", format
+DECLARE i =  i4
+set i=0 ; to break out of detail
+ 
+DECLARE i =  i4
+set i=0 ; to break out of detail
+ 
+ 
+
+select INTO $OUTDEV
+	PERSON_ID = PAT_IMM->PERSON_IMM[i].PERSON_ID,
+    LASTNAME = PAT_IMM->PERSON_IMM[i].LASTNAME,
+    FIRSTNAME = PAT_IMM->PERSON_IMM[i].FIRSTNAME,
+    MIDDLENAME = PAT_IMM->PERSON_IMM[i].MIDDLENAME,
+    DOB =  PAT_IMM->PERSON_IMM[i].DOB,
+    SEX =  PAT_IMM->PERSON_IMM[i].SEX
+	from (dummyt d1 with seq = VALUE(SIZE(PAT_IMM->PERSON_IMM[i].imm,5)))
+	plan d1
+join ce
+where ce.person_id = p2.person_id
+and ce.event_tag != "In Error"
+and ce.view_level = 1
+and ce.valid_until_dt_tm = cnvtdatetime("31-DEC-2100 00:00:00")
+and ce.event_cd in (22392525) ;Adult TDAP
+/*
+or ce.person_id = p2.person_id
+and ce.event_tag != "In Error"
+and ce.view_level = 1
+and ce.valid_until_dt_tm = cnvtdatetime("31-DEC-2100 00:00:00")
+and ce.event_cd in(
+)
+*/ 
+join cmr
+where cmr.event_id = ce.event_id
+order by sort, name, p.person_id, cmr.event_id;sort, p.person_id, cmr.event_id
+ 
+ 
+Head Report
+ 
+pers_cnt = 0
+imm_cnt = 0
+tot_cnt = 0
+qual_tot = 0
+month1 = SUBSTRING(1,4,TRIM(CNVTSTRING($BegMonth)))
+month2 = SUBSTRING(1,4,TRIM(CNVTSTRING($EndMonth)))
+ 
+ 
+head page
+col 1 "Immunization Rate - Adult Td/Tdap - Ages ", month1," - ", month2
+col 100 "Page ", curpage
+row + 1
+col 1 "Data for Physician:  ", PCPname;$PCP
+row + 1
+col 1 "Saint Joseph Family Medicine Center"
+row + 1
+col 1 "Saint Joseph Associates in Family Medicine"
+row + 2
+col 1 "Name",
+col 39 "Age",
+col 54 "DTP",
+col 65 "Polio",
+col 78 "MMR",
+col 90 "HIB",
+col 101 "HepB",
+col 113 "Pcv",
+col 124 "Varicella"
+col 137 "Qualify"
+row + 1
+ 
+head sort
+row + 0
+pers_cnt = 0
+ 
+head p.person_id
+pers_cnt = pers_cnt + 1
+if (pers_cnt < 26)
+  if (imm > 0)
+    imm_cnt = imm_cnt + 1
+  else
+    imm_cnt = imm_cnt + 0
+  endif
+  tot_cnt = tot_cnt + 1
+  dtp_cnt = 0
+  polio_cnt = 0
+  mmr_cnt = 0
+  hib_cnt = 0
+  hepb_cnt = 0
+  pcv_cnt = 0
+ qual_cnt = 0
+ varicella_cnt = 0
+ 
+
+ 
+head cmr.event_id
+if (ce.event_cd in (22392525))
+TDAP_cnt = TDAP_cnt + 1
+endif
+
+ 
+ 
+foot p.person_id
+ 
+/* 
+if ((dtp_cnt > $dtp) and (polio_cnt > $polio) and (mmr_cnt > $mmr) and (hib_cnt > $hib) and
+(hepb_cnt > $hepb) and (pcv_cnt > $pcv) and (varicella_cnt > $varicella)
+)
+qual_cnt = qual_cnt + 1
+qual_tot = qual_tot + 1
+else
+qual_cnt = qual_cnt + 0
+qual_tot = qual_tot + 0
+endif
+*/
+val_string = concat(cnvtstring(dtp_cnt), " ",cnvtstring(polio_cnt), " ",cnvtstring(mmr_cnt))
+ 
+ 
+;col 1 p.person_id,
+col 1 name,
+col 35 age,
+;col 70 imm
+;col 85 pers_cnt
+col 55 val_string
+;col 60 polio_cnt
+;col 75 mmr_cnt
+;col 90 hib_cnt
+;col 105 hepb_cnt
+;col 120 pcv_cnt
+;if (qual_cnt = 1)
+;col 139 "Y"
+;else
+;col 139 "N"
+;endif
+row + 1
+;endif
+ 
+ endif
+ 
+foot report
+percent = (cnvtreal(qual_tot)/cnvtreal(tot_cnt))*100
+row + 1
+col 1 "Total visits counted: "
+col 40 tot_cnt
+row  +1
+col 1 "Patients with Adult Td/Tdap: "
+col 40 qual_tot,
+row + 1
+col 1 "Percentage with Adult Td/Tdap: "
+col 40 percent, "%"
+row + 1
+ 
+with time = 200, maxcol = 300, dontcare = ce, dontcare = cmr; format, separator = " "
+ 
+ 
+END
+GO
+ 

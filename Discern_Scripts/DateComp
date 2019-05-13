@@ -1,0 +1,93 @@
+DROP PROGRAM mhin_tl_imm_flu:dba GO
+CREATE PROGRAM mhin_tl_imm_flu:dba
+ 
+prompt
+"Output to File/Printer/MINE" = "MINE"
+, "Enter Interval (mon. = m, quart. = q, semi-a. = sa, an. = a):" = "a"
+, "Enter Facilities (separate each location by a semicolon):" = "SJPNFPCPCO;SJPNAFMPCO"
+ 
+if ($2 = "m")
+set interval = cnvtint(10)
+elseif ($2 = "q")
+set interval = cnvtint(100)
+elseif ($2 = "sa")
+set interval = cnvtint(190)
+elseif ($2 = "a")
+set interval = cnvtint(375)
+endif
+;SET BEGIN_DT = DATETIMEFIND(CNVTDATETIME((CURDATE-16)-interval,0),"M","B","B")
+;SET END_DT = DATETIMEFIND(CNVTDATETIME((CURDATE-16)-25,0),"M","E","E")
+ 
+SET BEGIN_DT = DATETIMEFIND(CNVTDATETIME(CURDATE-interval,0),"M","B","B")
+SET END_DT = DATETIMEFIND(CNVTDATETIME(CURDATE-5,0),"M","E","E")
+ 
+ 
+;***********************************************************************
+;SEARCH AND STORE THE NUMBER OF LOCATIONS THE USER ENTERED
+;***********************************************************************
+record locs
+(       1 qual                  = i4
+        1 loc[*]
+                2 strings       = vc
+                2 loc_cd        = f8
+)
+ 
+set semicolon = char(59)
+set loc_string = $3
+set play_string = loc_string
+set size_play_string = size(play_string)
+set count_locations = 0
+set x = 1
+while (x != 0)
+        set found = findstring(semicolon, play_string)
+        set count_locations = count_locations + 1
+        set stat = alterlist(locs->loc,count_locations)
+        if (found !=0)
+                set locs->loc[count_locations].strings =
+                        cnvtalphanum(replace(cnvtupper(trim(substring(1,found-1, play_string))),char(32),char(0),0))
+                set play_string = (substring(found+1,size_play_string-found,play_string))
+                set size_play_string = size(play_string)
+        else ;one location left
+                set locs->loc[count_locations].strings =
+                        cnvtalphanum(replace(cnvtupper(trim(play_string)),char(32),char(0),0))
+                set size_play_string = size(play_string)
+                set x = 0
+        endif
+        set size_play_string = size(play_string)
+endwhile
+set locs->qual = count_locations
+ 
+select into "nl:"
+from (dummyt d with seq = value(locs->qual))
+detail
+col 0 locs->loc[d.seq].strings
+row + 1
+ 
+;***********************************************************************
+;SELECT AND STORE VALID LOCATIONS
+;***********************************************************************
+record loc_cd
+(       1 qual                  = i4
+        1 loc[*]
+                2 loc_cd        = f8
+                2 desc          = c50
+)
+select into "nl:"
+        cv.display_key, cv.display
+from    code_value cv,
+        (dummyt d with seq = value(locs->qual))
+plan    cv
+where   cv.code_set = 220
+and     cv.cdf_meaning = "FACILITY"
+and     cv.active_ind = 1
+join    d
+where   locs->loc[d.seq].strings = cv.display_key
+head report
+        cnt = 0
+detail
+        cnt = cnt + 1
+        stat = alterlist(loc_cd->loc,cnt)
+        loc_cd->loc[cnt].loc_cd = cv.code_value
+        loc_cd->loc[cnt].desc = substring(1,50,cv.display)
+foot report
+        loc_cd->qual = cnt

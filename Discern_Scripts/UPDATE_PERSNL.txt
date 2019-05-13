@@ -1,0 +1,247 @@
+Need update statement to expire relationship on the person_prsnl_reltn table
+
+Per our discussion, an update statement is needed that will expire the "Community View" relationships .  
+The code value is 84223816 (Mock 72822917).  Code set 331 in Mock.
+On the codeset, we have the duration set to 7 and the duration_unit set to DAYAFTEFF.  
+To be consistent with this setting, any relationship established more than 7 days prior to the date/time that the update runs should be expired.  
+I think all we need to do is to update the active_status_cd to 175, active_ind to 0 and set the end_effective_dt_tm to the current date/time.  
+
+
+Basically we are looking at writing a program to update information on the PERSON_PRSNL_RELTN table.  
+
+The PERSON_PRSNL_RELTN table holds information detailing the personnel that are associated to patients at the Patient or Person Level (as opposed to the visit level). 
+
+
+1)	First take a look at the PERSON_PRSNL_RELTN table and see what column defines the type of relationship type. 
+
+PERSON_PRSNL_R_CD CODE SET:331                                                                                    
+    55                              Person Prsnl Relationship Id
+2)	Also look at ccloraindex to view the oracle indexes on this table and how we might be able to get to the data quickly. 
+Index1:
+PRSNL_PERSON_ID               NONUNIQUE   
+ACTIVE_IND                                
+PERSON_PRSNL_R_CD
+
+Index2:
+PERSON_ID                     NONUNIQUE   
+PRSNL_PERSON_ID                           
+ACTIVE_IND
+
+Update 
+
+UPDATE  INTO PERSON_PRSNL_RELTN
+SET	
+active_status_cd = 175, 
+active_ind = 0, 
+end_effective_dt_tm =  CNVTDATETIME(CURDATE,CURTIME3)
+WHERE PERSON_PRSNL_R_CD = 72822917 -PROD CD: 84223816
+--DateDiff(BEG_EFFECTIVE_DT_TM, CNVTDATETIME(CURDATE,CURTIME3)) > 7
+AND END_EFFECTIVE_DT_TM > CNVTDATETIME(CURDATE,CURTIME3)
+AND ACTIVE_IND = 1
+-- UPDT_DT_TM > today's date
+GO
+
+
+INDEXES FOR PERSON_PRSNL_RELTN
+/*----------------------------------------------
+PRSNL_PERSON_ID               NONUNIQUE   
+ACTIVE_IND                                
+PERSON_PRSNL_R_CD
+
+PERSON_ID                     NONUNIQUE   
+PRSNL_PERSON_ID                           
+ACTIVE_IND
+-----------------------------------------------*/
+
+
+
+
+RDB SELECT * FROM PERSON_PRSNL_RELTN 
+WHERE PERSON_ID = 46551185
+AND PERSON_PRSNL_R_CD = 72822917
+GO
+
+
+
+
+PERSON_PRSNL_RELTN_ID = 170619753
+END_EFFECTIVE_DT_TM = 31-DEC-2100 00:00:00
+
+UPDATE INTO PERSON_PRSNL_RELTN
+SET END_EFFECTIVE_DT_TM = CNVTDATETIME(CURDATE,CURTIME3)
+WHERE PERSON_PRSNL_RELTN_ID = 170619753
+GO
+
+
+
+RDB SELECT * FROM PERSON_PRSNL_RELTN 
+WHERE PERSON_ID = 46551185
+AND PERSON_PRSNL_R_CD = 72822917
+ORDER BY PERSON_PRSNL_RELTN_ID
+GO
+
+
+UPDATE INTO PERSON_PRSNL_RELTN
+SET END_EFFECTIVE_DT_TM = CNVTDATETIME(CURDATE,CURTIME3),
+active_status_cd = 175,
+ACTIVE_IND = 0
+WHERE PERSON_PRSNL_RELTN_ID = 170619753
+
+
+DATETIMEADD(rdb_date_time,interval)
+
+
+RDB SELECT * FROM PERSON_PRSNL_RELTN 
+WHERE PERSON_ID = 46551185
+AND PERSON_PRSNL_R_CD = 72822917
+ORDER BY PERSON_PRSNL_RELTN_ID
+GO
+
+8/19/09------------------------------------------------------------------------------------------
+
+DATETIMECMP(rdb_date_time1,rdb_date_time2)
+
+SET COMMVIEW_CD = 0.0
+SET  STAT  =  UAR_GET_MEANING_BY_CODESET ( 331 ,  "EMRGCYACCESS" ,  1 ,  COMMVIEW_CD ) 
+;UAR_GET_MEANING_BY_CODESET(code_set, cdf_meaning, count, code_variable)
+
+
+RDB SELECT PRSNL.* 
+;PRSNL.active_status_cd = 175, 
+;PRSNL.active_ind = 0, 
+;PRSNL.end_effective_dt_tm =  CNVTDATETIME(CURDATE,CURTIME3)
+FROM PERSON_PRSNL_RELTN PRSNL
+WHERE DateDiff(BEG_EFFECTIVE_DT_TM, CNVTDATETIME(CURDATE,CURTIME3)) > 7;END_EFFECTIVE_DT_TM 
+ORDER BY PRSNL.PERSON_PRSNL_RELTN_ID
+
+
+SELECT * FROM PERSON_PRSNL_RELTN
+WHERE DATETIMECMP(BEG_EFFECTIVE_DT_TM,END_EFFECTIVE_DT_TM)> 7 
+WITH MAXREC = 100
+GO
+
+
+SET COMMVIEW_CD = 0.0 GO
+SET  STAT  =  UAR_GET_MEANING_BY_CODESET ( 331 ,  "EMRGCYACCESS" ,  1 ,  COMMVIEW_CD ) GO
+
+rdb SELECT TEST1 = DATETIMECMP(BEG_EFFECTIVE_DT_TM,END_EFFECTIVE_DT_TM),* 
+FROM PERSON_PRSNL_RELTN PRSNL
+WHERE PERSON_PRSNL_R_CD = COMMVIEW_CD
+;AND DATETIMECMP(BEG_EFFECTIVE_DT_TM,END_EFFECTIVE_DT_TM)> 7 
+AND DATETIMECMP(CNVTDATETIME(CURDATE,0),BEG_EFFECTIVE_DT_TM) > 7
+;AND END_EFFECTIVE_DT_TM = 
+;PLAN 
+WITH MAXREC = 100
+GO
+
+
+To be consistent with this setting, any relationship established more than 7 days prior to the date/time that the update runs should be expired.  
+I think all we need to do is to update the active_status_cd to 175, active_ind to 0 and set the end_effective_dt_tm to the current date/time.  
+
+
+SET COMMVIEW_CD = 0.0 GO
+SET DURATION = 0.0 GO
+SET  STAT  = UAR_GET_MEANING_BY_CODESET ( 331 ,"EMRGCYACCESS",1,COMMVIEW_CD) GO
+
+SELECT INTO "NL:" 
+CVE.FIELD_VALUE
+FROM CODE_VALUE_EXTENSION CVE
+WHERE CVE.CODE_VALUE = COMMVIEW_CD
+AND CVE.FIELD_NAME = "DURATION" 
+GO
+
+SET DURATION = CNVTINT(CVE.FIELD_VALUE) GO
+
+SELECT * 
+FROM PERSON_PRSNL_RELTN PRSNL
+WHERE PERSON_PRSNL_R_CD = COMMVIEW_CD
+AND DATETIMECMP(CNVTDATETIME(CURDATE,0),BEG_EFFECTIVE_DT_TM) > 
+AND END_EFFECTIVE_DT_TM = CNVTDATETIME("31-DEC-2100 00:00:00")
+WITH MAXREC = 100
+GO
+
+
+-------------------------
+
+SET COMMVIEW_CD = 0.0 GO
+;DECLARE DURATION =  GO
+SET STAT = UAR_GET_MEANING_BY_CODESET ( 331 ,"EMRGCYACCESS",1,COMMVIEW_CD) GO
+
+
+SELECT INTO "NL:" 
+DURATION = CVE.FIELD_VALUE
+FROM CODE_VALUE_EXTENSION CVE
+WHERE CVE.CODE_VALUE = COMMVIEW_CD
+AND CVE.FIELD_NAME = "DURATION" 
+GO
+
+CALL ECHO (DURATION) GO 
+
+------------------------------------------------------
+
+
+/*FINAL SELECT VERSION*/
+SET COMMVIEW_CD = 0.0 GO
+DECLARE DURATION = I4 GO
+SET  STAT  =  UAR_GET_MEANING_BY_CODESET ( 331 ,  "EMRGCYACCESS" ,  1 ,  COMMVIEW_CD ) GO
+
+SELECT INTO "NL:" 
+CVE.FIELD_VALUE
+FROM code_value_extension CVE
+where CVE.code_value = COMMVIEW_CD
+AND CVE.FIELD_NAME = "DURATION" 
+
+DETAIL
+DURATION = CNVTINT(CVE.FIELD_VALUE) 
+
+GO
+
+SELECT UPDT_CNT,END_EFFECTIVE_DT_TM,ACTIVE_STATUS_CD,ACTIVE_IND,UPDT_ID,UPDT_DT_TM, * 
+FROM PERSON_PRSNL_RELTN PRSNL
+WHERE PERSON_PRSNL_R_CD = COMMVIEW_CD
+AND DATETIMECMP(CNVTDATETIME(CURDATE,0),BEG_EFFECTIVE_DT_TM) > DURATION
+AND END_EFFECTIVE_DT_TM = CNVTDATETIME("31-DEC-2100 00:00:00")
+WITH MAXREC = 100
+GO
+
+CALL ECHO (DURATION) GO
+
+------------------------------------------------------
+DROP PROGRAM   MHIN_expire_ppr_commview : DBA  GO
+CREATE PROGRAM   mhin_expire_ppr_commview : DBA   
+
+
+; Request HNAM sign-on when executed from CCL on host
+IF (VALIDATE(IsOdbc, 0) = 0)  EXECUTE CCLSECLOGIN  ENDIF
+
+
+
+SET COMMVIEW_CD = 0.0 GO
+SET ACTSTAT_CD = 0.0 GO
+DECLARE DURATION = I4 GO
+SET  STAT  =  UAR_GET_MEANING_BY_CODESET(331,"EMRGCYACCESS",1,COMMVIEW_CD) GO
+SET  STAT2 =  UAR_GET_MEANING_BY_CODESET(48, "INACTIVE", 1, ACTSTAT_CD) GO
+
+SELECT INTO "NL:" 
+CVE.FIELD_VALUE
+FROM CODE_VALUE_EXTENSION CVE
+WHERE CVE.CODE_VALUE = COMMVIEW_CD
+AND CVE.FIELD_NAME = "DURATION" 
+
+DETAIL
+DURATION = CNVTINT(CVE.FIELD_VALUE) 
+
+
+UPDATE INTO PERSON_PRSNL_RELTN
+SET END_EFFECTIVE_DT_TM = CNVTDATETIME(CURDATE,CURTIME3),
+ACTIVE_STATUS_CD = ACTSTAT_CD,
+ACTIVE_IND = 0,
+UPDT_ID = 57781549,
+UPDT_DT_TM = CNVTDATETIME(CURDATE,CURTIME3),
+UPDT_CNT = UPDT_CNT +1
+WHERE PERSON_PRSNL_R_CD = COMMVIEW_CD
+AND DATETIMECMP(CNVTDATETIME(CURDATE,0),BEG_EFFECTIVE_DT_TM) > DURATION
+AND END_EFFECTIVE_DT_TM = CNVTDATETIME("31-DEC-2100 00:00:00")
+COMMIT
+
+END GO

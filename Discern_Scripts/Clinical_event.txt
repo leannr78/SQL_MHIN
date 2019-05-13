@@ -1,0 +1,30 @@
+select CE.clinical_event_id,event_id,uar_get_code_display (ce.event_cd ),ce.event_cd, * 
+from clinical_event ce 
+where ce.encntr_id = 34030475
+and ce.event_cd in (  262856269.00,
+  262911683.00
+)
+;AND CE.CLINICAL_EVENT_ID = 2733079132
+;and ce.person_id = 54262792
+;and ce.event_class_cd =231
+
+--------------------------------------------------
+
+select CE.clinical_event_id,event_id,uar_get_code_display (ce.event_cd ),ce.event_cd, * 
+from clinical_event ce 
+where ce.encntr_id = 34030475
+AND CE.CLINICAL_EVENT_ID = 2733079132
+;and ce.person_id = 54262792
+;and ce.event_class_cd =231
+-------------------------------------------------------
+
+select CE.clinical_event_id,event_id,uar_get_code_display (ce.event_cd ),ce.event_cd, * 
+from clinical_event ce 
+where ce.encntr_id = 34030475
+AND CE.CLINICAL_EVENT_ID = 2733079132
+;and ce.person_id = 54262792
+;and ce.event_class_cd =231
+
+
+
+credc1652.fsi

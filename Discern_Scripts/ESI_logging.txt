@@ -1,0 +1,35 @@
+SELECT ; into $OUTDEV
+ 	CREATE_DT_TM 	= 	FORMAT (E.CREATE_DT_TM ,"mm/dd/yy hh:mm;;d" ),
+	MSH_MSG_TRIG 	= 	trim(substring(1,8,E.MSH_MSG_TRIG)),
+    MSH_MSG_TYPE 	= 	trim(substring(1,8,E.MSH_MSG_TYPE)),
+    MSH_SENDING_APP = 	trim(substring(1,32,E.MSH_SENDING_APP)),
+    MSGID 			= 	trim(substring(1,16,E.MSGID)),
+    NAME_FULL_FORMATTED 	= 	;substring(1, 50, concat(ROW_START, trim(E.NAME_FULL_FORMATTED), ROW_TERMINATE)),
+    trim(E.NAME_FULL_FORMATTED),
+    PERSON_ID		= 	E.PERSON_ID,
+    ENCNTR_ALIAS	= 	trim(substring(1,255,E.ENCNTR_ALIAS)),
+    ENCNTR_ID		= 	E.ENCNTR_ID,
+    ORDER_ID		= 	E.ORDER_ID,
+    ERROR_STAT		= 	E.ERROR_STAT,
+    ERROR_TEXT		= 	E.ERROR_TEXT,
+    QUEUE_ID		= 	E.QUEUE_ID,
+    ESI_INSTANCE	= 	E.ESI_INSTANCE,
+    OEN_MSGID			= 	O.MSGID,
+    MSG_TEXT		= 	O.MSG_TEXT
+;_CRLF,""),3)
+   ; trim(O.MSG_TEXT)	
+FROM
+                ESI_LOG   E
+                , OEN_TXLOG   O
+Plan E
+	WHERE 	E.CREATE_DT_TM ;BETWEEN CNVTDATETIME(begin_date) AND CNVTDATETIME(end_date)
+	 BETWEEN cnvtdatetime("7-SEP-2016 00:00:00") AND cnvtdatetime("8-SEP-2016 00:00:00")
+	and		E.ERROR_STAT = "*FAILURE"
+	and E.msh_sending_app =  "CPDI"
+JOIN O 
+	where o.msgid = e.msgid
+ORDER BY
+                E.MSH_SENDING_APP
+                , E.CREATE_DT_TM
+                , E.MSH_MSG_TYPE
+with maxrec = 1000, time = 60

@@ -1,0 +1,38 @@
+
+select * from prsnl p where p.name_last_key = "WALDMAN"
+
+select * from prsnl_alias pa where pa.person_id =     7285500.00
+
+-----------------------------------------------
+
+ select * from prsnl p
+ where p.person_id = 7285500
+ 
+ select * from 
+ encntr_alias ea
+ where ea.alias = "1621401652"
+ with maxrec =100, time=60
+ 
+  SELECT
+	epr.ACTIVITY_DT_TM
+	, epr.BEG_EFFECTIVE_DT_TM
+	, EPR_CONTRIBUTOR_SYSTEM_DISP = UAR_GET_CODE_DISPLAY(EPR.CONTRIBUTOR_SYSTEM_CD)
+	, EPR_ENCNTR_PRSNL_R_DISP = UAR_GET_CODE_DISPLAY(EPR.ENCNTR_PRSNL_R_CD)
+	, epr.END_EFFECTIVE_DT_TM
+	, EPR_FREE_TEXT_DISP = UAR_GET_CODE_DISPLAY(EPR.FREE_TEXT_CD)
+	, epr.FT_PRSNL_NAME
+	, epr.LAST_UTC_TS
+	, EPR_NOTIFICATION_DISP = UAR_GET_CODE_DISPLAY(EPR.NOTIFICATION_CD)
+	, p.name_full_formatted
+	, p.person_id
+	, epr.*
+FROM
+	encntr_prsnl_reltn   epr
+	,prsnl p
+PLAN EPR
+where epr.encntr_id =    34339325.00
+JOIN P
+where p.person_id = epr.prsnl_person_id
+ with maxrec =1000, time=60
+ 
+ se

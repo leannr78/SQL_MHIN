@@ -1,0 +1,486 @@
+/*
+ *  ---------------------------------------------------------------------------------------------
+ *  Script Name:  UP_CPDI_NONCLINICAL_v2
+ *  Copied from:  UP_CPDI_NONCLINICAL_MORG
+ *  Description:  Insert rows to BLOB_REFERENCE table for non-clinical documents
+ *  Type:  Open Engine Modify Original Script
+ *  ---------------------------------------------------------------------------------------------
+ *  Domain:  P135
+ *  Creation Date:  05/25/2015 23:47:32
+ *  Update Date: 
+ *	v2 5/24/16 c13805 - additional logging
+ *  ---------------------------------------------------------------------------------------------
+ */
+
+execute oencpm_msglog(build("*****HI_v2****",char(0)))
+execute oencpm_msglog(build(trim(oen_request->org_msg),char(0)))
+
+	;;script will parse pipe "|" delimited index file 
+	;;from CPDI imaging upload
+	;;then write rows for NON CLINICAL DOCUMENTS 
+	;;to blob_reference. 
+	;;DO NOT USE THIS FOR CLINICAL DOCUMENTS, they need to process through ESI 
+	;;to create clinical event rows.
+	
+;****************************************
+;;Design dependencies
+	;; 1.) CPDI Document type crosswalk has to be done.  
+	;;        This load is ONLY for non clinical documents that should not post to powerchart
+	;; 2.) CPDI needs separate .fsi files for clinical and non clinical documents.  
+	;;		If you post the same blob_uid to both clinical event/ce_blob_result 
+	;;		and blob_reference it will cause CPDI issues.
+	;; 3.) alias cs 26820 to whatever values provided in the input files match to.  
+	;;         Usually files are provided with the document type aliases in all caps.
+	;; 4.) get file layout from CPDI for their .fsi files for non clinical documents
+	;; 5.) ensure all necessary items are in file (blob_uid, mrn/fin, 
+	;;         document type, scan date or clinically significant date)
+	;; 6.) add variables/modify parsing section of this script as needed to meet file layout.
+	;; 7.) all MRN/FIN values must already be in Cerner.  This load WILL NOT create 
+	;;          persons/encounters, it will ONLY insert rows to blob_reference.  
+	;;          if MRN/FIN# not found for record it will be written to an output file
+	;; 8.) have CPDI determine if they want encounter level documents 
+	;;          where the FIN# is not found in cerner to post to the person level or fail
+	;; 9.) if MRN is not found and it's a person level document it will fail/write to file.
+	;;10.) if FIN# is not tied to the MRN# in the record, it will fail/write to file
+	;; 
+	;;FILE LAYOUT FOR THIS IMPLEMENTATION:
+	;1 BATCH_NAME
+	;2 BLOB_UID
+	;3 PATIENT_NAME
+	;4 ENCTR_NBR
+	;5 MRN
+	;6 DOC_TYPE
+	;7 SUBJECT
+	;8 DOC_ALIAS
+	;9 DATE_OF_SERVICE  ;formatted MM/DD/YYYY
+	;10 TIME_OF_SERVICE ;formatted HH:MM:SS
+	;11 TRACKING_NBR  ;formatted batch_nbr - sequence nbr (PFT0001-00001)
+
+;****************************************
+;step 1 
+	;;declare needed variables to parse input file
+	;;not all fields may be used.
+	  declare batch_name = vc ;input file field 1
+	  declare blob_uid = vc ;input file field 2
+	  declare name = vc ;input file field 3
+	  declare enctr_nbr = vc ;input file field 4
+	  declare mrn = vc ;input file field 5
+	  declare doc_type = vc ;input file field 6, alias on cs 26820
+	  declare doc_type_cd = f8 ; code value for document type from 26820
+	  declare subject = vc ;input file field 7
+	  declare doc_alias = vc ;input file field 8
+	  declare DOS = vc ;input file field 9
+	  declare TOS = vc ;input file field 10
+	  declare tracking_nbr = vc ;input file field 11
+	  declare q_encntr_id = f8
+	;;declare other fields needed for insert
+	  declare encntr_id = f8 ;encntr_id from encntr_alias
+	  declare person_id = f8 ;person_id from person_alias
+	  declare doc_type_cd = f8 ; code value for document type from 26820
+	  declare storage_cd = f8 ;cs 25 value for "OTG"
+	  declare format_cd = f8 ;cs 23 value for "TIFF"
+	  declare date_in = dq8
+	  declare dt_fmt = vc
+	  declare date_time = vc ;reformatted date/time input from DOS/TOS
+	  declare document_id = f8 ;reformatted tracking nbr
+	  declare c_src = f8 ;contributor source for queries
+	  declare c_sys_person_id = f8 ;person id for contributor system.
+	  declare mrn_pool = f8 ;alias pool cd cs 263 for MRN to be looked up
+	  declare fin_pool = f8 ;alias pool cd cs 263 for FIN to be looked up
+	  declare msg_in = vc
+	  declare parent_entity_name = vc
+	  declare parent_entity_id = f8
+	  declare debug = i2
+	  declare filename = vc
+	  declare filename2 = vc ;c13805
+	  declare bad_rec = i2
+	  declare on_table = i2  ;c13805
+	  declare q_blob_ref_id = f8
+	  declare error_text = vc
+	  
+;*****************************************
+;;STEP 2 setup input string and set variables not in input file
+	 ;;these will change per implementation
+	  set c_src = uar_get_code_by("DISPLAYKEY",73,"CPDI")
+	  set mrn_pool = uar_get_code_by("DISPLAYKEY",263,"CNMCMRN")
+	  set fin_pool = uar_get_code_by("DISPlAYKEY",263,"CNMCACCOUNTNUMBER")
+	  set filename = "fail_log_nonclin.cpdi"
+	  set filename2 = "fail_log_nonclin_blob.cpdi" ; c13805 for rows already on table
+	  
+	  select into "nl:"
+	    p.person_id
+	  from person p
+	  where p.name_last_key = "CONTRIBUTORSYSTEM" and
+	               p.name_first_key = "CPDI"
+	  detail
+	    c_sys_person_id = p.person_id
+	  with nocounter
+	
+	  ;these should be constant across domains
+	  set debug = 1  ;set to 0 if you don't want execute oencpm_msglog statements in msgview, 1 if you do
+	  set storage_cd = uar_get_code_by("DISPLAYKEY",25,"OTG")
+	  set format_cd = uar_get_code_by("DISPLAYKEY",23,"TIFF")
+	  set msg_in = trim(oen_request->org_msg)
+	
+	  set bad_rec = 0 ;c13805 
+	  set on_table = 0 ;c13805 for rows already on table - go to filename2
+	
+;******************************************
+;;STEP 3 parse file.  this uses the PIECE function.  
+	;;;If that function is not available on your code level you will have to parse with loops
+	
+	  set batch_name = piece(trim(msg_in),"|",1,"")
+	  set blob_uid = piece(trim(msg_in),"|",2,"")
+	  set name = piece(trim(msg_in),"|",3,"")
+	  set enctr_nbr = piece(trim(msg_in),"|",4,"")
+	  set mrn = piece(trim(msg_in),"|",5,"")
+	  set doc_type = piece(trim(msg_in),"|",6,"")
+	  set subject = piece(trim(msg_in),"|",7,"")
+	  set doc_alias = piece(trim(msg_in),"|",8,"")
+	  set DOS = piece(trim(msg_in),"|",9,"")
+	  set TOS = piece(trim(msg_in),"|",10,"")
+	  set tracking_nbr = piece(trim(msg_in),"|",11,"")
+	      execute oencpm_msglog(build("enctr_nbr = ",enctr_nbr,char(0)))
+	while (substring(1,1,enctr_nbr) = "0")
+	   set enctr_nbr = substring(2,size(enctr_nbr)-1,enctr_nbr)
+	endwhile     ;     encntr_nbr
+	
+	while (substring(1,1,mrn) = "0")
+	   set mrn = substring(2,size(mrn)-1,mrn)
+	endwhile     ;     mrn
+	
+;;******************************************
+;STEP 4.  look up any other needed values/reformat data sent prior to doing inserts
+
+	  ;get person_id
+	  if(trim(mrn) != "")
+	    select into "nl:"
+	       pa.person_id
+	     from person_alias pa
+	     where pa.alias = trim(mrn) and
+	                  pa.alias_pool_cd = mrn_pool and
+	                  pa.active_ind = 1 and
+	                  pa.end_effective_dt_tm > cnvtdatetime(curdate,curtime)
+	     detail
+	        person_id = pa.person_id
+	      with nocounter
+	  endif     ;     mrn query
+	  
+		
+		if (not(person_id > 0.0)) ; c13805-Checking if multiple aliases exist regardless of end_effective_dt_tm
+			select distinct into "nl:"
+	       		pa.person_id
+	     	from person_alias pa
+	     	where pa.alias = trim(mrn) and
+	                  pa.alias_pool_cd = mrn_pool and
+	                  pa.active_ind = 1
+	        order by pa.person_id
+	    	if (curqual = 1)  
+	    		execute oencpm_msglog(build("*****************  Distinct Aliases        *******************",char(0)))
+			   	select distinct into "nl:"
+	       			pa.person_id
+	     		from person_alias pa
+	     		where pa.alias = trim(mrn) and
+	                  pa.alias_pool_cd = mrn_pool and
+	                  pa.active_ind = 1 
+		order by pa.person_id
+	           	detail
+	        		person_id = pa.person_id
+	      		with nocounter
+	   		else
+	     		call echo("!!!More than two people with same alias!!!")
+				set bad_rec = 1
+	 			set error_text = concat(error_text,"Multiple Aliases|")
+	 			execute oencpm_msglog(build("*****************    Multiple Aliases     *******************",char(0)))
+	 		endif
+	 	endif
+
+	
+	;get encntr_id
+	if (person_id > 0.0)
+	  if(trim(enctr_nbr) != "")
+	     select into "nl:"
+	       ea.encntr_id
+	     from encntr_alias ea
+	     where ea.alias = trim(enctr_nbr) and
+	                  ea.alias_pool_cd= fin_pool and
+	                  ea.active_ind = 1 and
+	                  ea.end_effective_dt_tm > cnvtdatetime(curdate,curtime)
+	      detail
+	         encntr_id = ea.encntr_id
+	      with nocounter
+	      if(encntr_id > 0)
+	        set parent_entity_name = "ENCOUNTER"
+	        set parent_entity_id = encntr_id
+	      else
+	        ;fin not found in system, post as person document
+	        set parent_entity_name = "PERSON"
+	        set parent_entity_id = person_id
+	      endif     ;     encntr_id
+	  else
+	     ;fin is empty
+	     set parent_entity_name = "PERSON"
+	     set parent_entity_id = person_id
+	  endif     ;     encntr_nbr
+	endif     ;     person_id
+	
+	  ;;document type cd
+	  select into "nl:"
+	     cva.code_value
+	  from code_value_alias cva
+	  where cva.contributor_source_cd = c_src and 
+	               cva.code_set = 26820 and
+	;               cva.alias = trim(doc_alias)     ;     c08495
+	               cva.alias = trim(doc_type)
+	   detail
+	      doc_type_cd = cva.code_value
+	   with nocounter
+	
+	  ;;reformat date/time stamp
+	  set dt_in = cnvtdate2(trim(DOS),"MM/DD/YYYY")
+	  set dt_fmt = format(dt_in,"DD-MMM-YYYY;;D")
+	  set date_time = concat(trim(dt_fmt), char(32),trim(TOS))
+	
+	  ;;reformat tracking nbr to use as document id
+	;  set document_id = cnvtreal(cnvtalphanum(substring(4, size(tracking_nbr) -3, trim(tracking_nbr))))
+	  set document_id = cnvtreal(cnvtalphanum(substring(10, size(tracking_nbr) -9, trim(tracking_nbr))))
+	;***********************************************************
+	;debugging;
+	  if(debug=1)
+	      execute oencpm_msglog(build("****PARSED FILE DATA***",char(0)))
+	      execute oencpm_msglog(build("batch_name = ",batch_name,char(0)))
+	      execute oencpm_msglog(build("blob_uid = ",blob_uid,char(0)))
+	      execute oencpm_msglog(build("name = ",name,char(0)))
+	      execute oencpm_msglog(build("enctr_nbr = ",enctr_nbr,char(0)))
+	      execute oencpm_msglog(build("mrn = ",mrn,char(0)))
+	      execute oencpm_msglog(build("doc_type = ",doc_type,char(0)))
+	      execute oencpm_msglog(build("subject = ",subject,char(0)))
+	      execute oencpm_msglog(build("doc_alias=",doc_alias,char(0)))
+	      execute oencpm_msglog(build("DOS = ",DOS,char(0)))
+	      execute oencpm_msglog(build("TOS = ",TOS,char(0)))
+	      execute oencpm_msglog(build("tracking_nbr = ",tracking_nbr,char(0)))
+	
+	      execute oencpm_msglog(build("****QUERY/UAR/REFORMATTED DATA****",char(0)))
+	      execute oencpm_msglog(build("c_src = ",c_src,char(0)))
+	      execute oencpm_msglog(build("mrn_pool = ",mrn_pool,char(0)))
+	      execute oencpm_msglog(build("fin_pool = ",fin_pool,char(0)))
+	      execute oencpm_msglog(build("c_sys_person_id = ",c_sys_person_id,char(0)))
+	      execute oencpm_msglog(build("storage_cd = ",storage_cd,char(0)))
+	      execute oencpm_msglog(build("format_cd = ",format_cd,char(0)))
+	      execute oencpm_msglog(build("batch_name = ",batch_name,char(0)))
+	      execute oencpm_msglog(build("person_id = ",person_id,char(0)))
+	      execute oencpm_msglog(build("encntr_id = ",encntr_id,char(0)))
+	      execute oencpm_msglog(build("parent_entity_name = ",parent_entity_name,char(0)))
+	      execute oencpm_msglog(build("parent_entity_id = ",parent_entity_id,char(0)))
+	      execute oencpm_msglog(build("doc_type_cd = ",doc_type_cd,char(0)))
+	      execute oencpm_msglog(build("document_id = ",document_id,char(0)))
+	      execute oencpm_msglog(build("date_time = ",date_time,char(0)))
+	  endif     ;     debug =1
+	
+;*************************************************************
+;	Verify good data for insert
+;	If not good data for insert, write record to output file
+;	set bad_rec = 0 ;c13805 added to beginning instead
+;*************************************************************
+
+	;;Skip all EOB HOSP BATCH ;c13805
+	if (substring(2,14,mrn) = "EOB HOSP BATCH" and bad_rec = 0)  ;c13805 bad_rec
+		set bad_rec = 1
+	 	set error_text = concat(error_text,"Skipping EOB|")
+	      	execute oencpm_msglog(build
+	("*****************    Skipping EOB     *******************",char(0)))
+	endif	;	EOB HOSP BATCH
+	
+	;;encntr id valid if ENCOUNTER Document
+	if(trim(parent_entity_name) = "ENCOUNTER" and encntr_id <= 0.0)
+	  set bad_rec = 1
+	  set error_text = concat(error_text,"Missing encounter id for encounter level document|")
+	      execute oencpm_msglog(build("Missing encounter id for encounter level document",char(0)))
+	endif     ;     ENCOUNTER
+	
+	;; person id valid if PERSON Document	
+	if(person_id <= 0.0 and bad_rec = 0)  ;c13805 bad_rec
+	  set bad_rec = 1
+	  set error_text = concat(error_text,"Invalid MRN|")
+	      execute oencpm_msglog(build
+	("*****************     Invalid MRN     *******************",char(0)))
+	endif     ;     PERSON
+	
+	;Document type cd found  ---missing in code_value_alias
+	if(doc_type_cd <= 0.0)  
+	    set bad_rec = 1
+	    set error_text = build(error_text,"Missing ",trim(doc_type)," in ", c_src,"|")
+	      execute oencpm_msglog(build
+	("*********************     Missing alias     *******************",char(0)))
+	endif     ;     doc_type_cd
+	
+	;Document type cd, storage cd and format cd all found
+	if(storage_cd <= 0.0 or format_cd <= 0.0) 
+	    set bad_rec = 1
+	    set error_text = concat(error_text,"Missing storage cd or format cd|")
+	      execute oencpm_msglog(build
+	("************************     Missing storage cd or format cd     **********************",char(0)))
+	endif     ;     storage_cd, et al
+	
+	;;encntr_id is valid for the personid tied to the MRN in the file
+	if (trim(parent_entity_name) = "ENCOUNTER" and encntr_id > 0.0)
+	select e.encntr_id
+	  from encounter e
+	  where e.person_id = person_id and
+	               e.encntr_id = encntr_id
+	  detail
+	    q_encntr_id = e.encntr_id
+	  with nocounter
+	   execute oencpm_msglog(build("q_encntr_id = ",q_encntr_id,char(0)))
+	  if(q_encntr_id <= 0.0)
+	     set bad_rec = 1
+	     set error_text = concat(error_text,"FIN# of ", trim(enctr_nbr), " not valid for MRN# ", trim(mrn),"|")
+	      execute oencpm_msglog(build
+	("************************     FIN / MRN mismatch     ************************",char(0)))
+	      execute oencpm_msglog(build("FIN# of ", trim(enctr_nbr), " not valid for MRN# ", trim(mrn),char(0)))
+	  endif     ;     q_encntr_id
+	endif     ;     person_id,encntr_id
+
+	;check if blob UID exists on table 
+	select into "nl:"
+	  br.blob_ref_id
+	from blob_reference br
+	where br.blob_handle = trim(blob_uid)
+	and br.parent_entity_id = parent_entity_id and
+	         br.parent_entity_name = parent_entity_name
+	detail
+	   q_blob_ref_id = br.blob_ref_id
+	with nocounter
+	
+	if(q_blob_ref_id > 0.0)
+	  ;set bad_rec=1
+	  set on_table = 1
+	  set error_text = concat(error_text,"BLOB UID ON TABLE|")
+	      execute oencpm_msglog(build
+	("****************     BLOB UID ALREADY ON TABLE     *********************",char(0)))
+	endif     ;     q_blob_ref_id
+	
+	;blob UID does not exist on table
+	select into "nl:"
+	  br.blob_ref_id
+	from blob_reference br
+	where br.blob_handle = trim(blob_uid)
+	;and br.parent_entity_id = parent_entity_id and
+	;         br.parent_entity_name = parent_entity_name
+	detail
+	   q_blob_ref_id = br.blob_ref_id
+	with nocounter, maxrec = 1
+	
+	if(q_blob_ref_id > 0.0 and on_table =0)
+	  set bad_rec=1
+	  set error_text = concat(error_text,"BLOB UID PARENT ISSUE|")
+	      execute oencpm_msglog(build
+	("****************     BLOB UID  PARENT ISSUE     *********************",char(0)))
+	endif     ;     q_blob_ref_id
+	
+/************************************************    */ 
+/*FINAL STEP: Write to Table or Error Logs
+*********************************************************/
+	if (on_table = 0);not on table ;c13805
+		if (bad_rec = 0) ;not a bad record
+		   execute oencpm_msglog(build("write to blob_reference",char(0)))	   
+		;run insert to BLOB_REFERENCE Table
+	 /*  insert into blob_reference br
+	     set br.blob_ref_id = seq(PATHNET_SEQ,NEXTVAL),
+	            br. blob_handle = trim(blob_uid),
+	            br.document_id = document_id,
+	            br.blob_dt_tm = cnvtdatetime(date_time),
+	            br.blob_type_cd = doc_type_cd,
+	            br.storage_cd = storage_cd,
+	            br.format_cd = format_cd,
+	            br.publish_flag=1,
+	            br.valid_from_dt_tm = cnvtdatetime(curdate,curtime),
+	            br.valid_until_dt_tm = cnvtdatetime("31-DEC-2100 00:00:00"),
+	            br.parent_entity_id = parent_entity_id,
+	            br.parent_entity_name = parent_entity_name,
+	;            br.blob_title = trim(doc_type),     ;     c08495
+	            br.blob_title = trim(subject),     ;     c08495
+	            br.chartable_note_id = 0.0,
+	            br.create_prsnl_id = c_sys_person_id,
+	            br.updt_id = c_sys_person_id,
+	            br.updt_dt_tm = cnvtdatetime(curdate,curtime),
+	            br.owner_cd = 0.0,
+	            br.sequence_nbr = 0,
+	            br.source_device_cd = 0.0,
+	            br.updt_cnt = 0,
+	            br.updt_applctx = 0,
+	            br.updt_task = 0
+	    with nocounter
+	    commit 
+	 */
+	   else
+		   execute oencpm_msglog(build("write to file, bad record",char(0)))
+		   execute oencpm_msglog(build("error: ",error_text,char(0)))
+		   ;setup cclio, write record to file, do not run insert
+		
+		   if(trim(filename) != "")
+		     declare stat = i4
+		     declare pos = i4
+		     free record  IO_CCLIO
+		     record IO_CCLIO
+		        ( 1 file_desc = i4
+		          1 file_offset = i4
+		          1 file_dir = i4
+		          1 file_name = vc
+		          1 file_buf = vc
+		        ) 
+		     set IO_CCLIO->file_name= filename
+		     set IO_CCLIO->file_buf = "a"     
+		     set stat = cclio("OPEN", IO_CCLIO)
+		 
+		     set out_msg = concat(trim(error_text), char(32),char(32),trim(msg_in),char(13),char(10))
+		    ;write
+		    execute oencpm_msglog(build("file_desc = ",IO_CCLIO->file_desc,char(0)))
+		    if(IO_CCLIO->file_desc != 0)
+		      set IO_CCLIO->file_buf = build(out_msg)
+		      set stat = cclio("WRITE", IO_CCLIO)
+		    endif    ;   cclio write   
+		    if(IO_CCLIO->file_desc != 0)
+		      set stat = cclio("CLOSE", IO_CCLIO)
+		    endif    ;   close file write
+		   endif   ;   filename
+		endif
+	 elseif (on_table >0);c13805
+		execute oencpm_msglog(build("write to file, on table",char(0)))
+		execute oencpm_msglog(build("error: ",error_text,char(0)))
+		   ;setup cclio, write record to file, do not run insert
+		
+		   if(trim(filename2) != "")
+		     declare stat = i4
+		     declare pos = i4
+		     free record  IO_CCLIO
+		     record IO_CCLIO
+		        ( 1 file_desc = i4
+		          1 file_offset = i4
+		          1 file_dir = i4
+		          1 file_name = vc
+		          1 file_buf = vc
+		        ) 
+		     set IO_CCLIO->file_name= filename2
+		     set IO_CCLIO->file_buf = "a"     
+		     set stat = cclio("OPEN", IO_CCLIO)
+		 
+		     set out_msg = concat(trim(error_text), char(32),char(32),trim(msg_in),char(13),char(10))
+		    ;write
+		    execute oencpm_msglog(build("file_desc = ",IO_CCLIO->file_desc,char(0)))
+		    if(IO_CCLIO->file_desc != 0)
+		      set IO_CCLIO->file_buf = build(out_msg)
+		      set stat = cclio("WRITE", IO_CCLIO)
+		    endif    ;   cclio write   
+		    if(IO_CCLIO->file_desc != 0)
+		      set stat = cclio("CLOSE", IO_CCLIO)
+		    endif    ;   close file write
+		   endif   ;   filename2
+	else 
+		   execute oencpm_msglog(build("ERROR",char(0)))
+	endif
+
+set oen_reply->out_msg = concat(trim(msg_in),char(0))
+#exit_script
+;ignore message after processing so it doesn't go to ESI
+set oenstatus->ignore=1

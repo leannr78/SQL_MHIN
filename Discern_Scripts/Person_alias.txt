@@ -1,0 +1,151 @@
+select * from
+
+person_alias pa, person p
+plan pa
+where pa.alias = "10169124"  ; same person
+join p
+where pa.person_id = p.person_id
+
+        3105933.00
+
+select p.name_full_formatted,e.person_id, ea.end_effective_dt_tm, ea.alias 
+from encntr_alias ea, encounter e, person p
+plan ea
+where ea.alias = "901600161"
+join e
+where ea.encntr_id = e.encntr_id
+join p
+where p.person_id = e.person_id
+
+0901600161|010169124
+with maxrec = 100, time = 60
+
+	  select ;into "nl:"
+	     cva.code_value,cva.contributor_source_cd,uar_get_code_display(cva.contributor_source_cd), *
+	  from code_value_alias cva
+	  where cva.contributor_source_cd = 188258039;c_src 
+	  
+	  and 
+	               cva.code_set = 26820 ;and
+	;               cva.alias = trim(doc_alias)     ;     c08495
+	              ; cva.alias = "VOUCHER";doc_type)
+	               with maxrec = 100, time = 60
+	   detail
+	      doc_type_cd = cva.code_value
+	   with nocounter
+
+-------------------------------------------------------------------------
+select pa.alias, alias= TRIM(cnvtalias(pa.alias,pa.alias_pool_cd)),
+Alias_pool=uar_get_code_display(pa.alias_pool_cd),
+cont_system=uar_get_code_display(pa.contributor_system_cd),
+Alias_type=uar_get_code_display(pa.person_alias_type_cd),
+* from person_alias pa 
+where ;pa.alias = "*658025*"
+;and 
+pa.person_id =    16309332.00
+with time = 60, maxrec = 100
+
+select * from person_alias pa 
+where pa.alias = "*956975*"
+with time = 60, maxrec = 100
+
+select * from person p
+where p.name_last_key = "MCMILLIAN"
+with time = 60, maxrec = 100
+
+select * from person p
+where p.person_id =    16309332.00
+
+
+select cont_system=uar_get_code_display(cs.contributor_system_cd),
+cs.organization_id,
+* from contributor_system cs
+with time = 60, maxrec = 100
+
+select * from organization o 
+where o.organization_id =       589723.00
+----------------------------------------------------------------------
+
+select * from
+
+person_alias pa, person p
+plan pa
+where pa.alias = "   30325171.00"  ; same person
+join p
+where pa.person_id = p.person_id
+
+        3105933.00
+
+select p.name_full_formatted,e.person_id, ea.end_effective_dt_tm, ea.alias ,*
+from encntr_alias ea, encounter e, person p
+plan ea
+where ea.alias = "1621801332"
+join e
+where ea.encntr_id = e.encntr_id
+join p
+where p.person_id = e.person_id
+
+;0901600161|010169124
+with maxrec = 100, time = 60
+
+	  select ;into "nl:"
+	     cva.code_value,cva.contributor_source_cd,uar_get_code_display(cva.contributor_source_cd), *
+	  from code_value_alias cva
+	  where cva.contributor_source_cd = 188258039;c_src 
+	  
+	  and 
+	               cva.code_set = 26820 ;and
+	;               cva.alias = trim(doc_alias)     ;     c08495
+	              ; cva.alias = "VOUCHER";doc_type)
+	               with maxrec = 100, time = 60
+	   detail
+	      doc_type_cd = cva.code_value
+	   with nocounter
+-------------------------------------------------------------------
+
+SELECT
+	PA_PERSON_ALIAS_TYPE_DISP = UAR_GET_CODE_DISPLAY(PA.PERSON_ALIAS_TYPE_CD)
+	, pa.ALIAS
+	, *
+
+FROM
+	person_alias   pa
+	, person   p
+
+plan pa
+where ;pa.alias = "   30325171.00"  ; same person
+pa.person_id =  6341523.00
+join p
+where pa.person_id = p.person_id
+
+        3105933.00
+
+select p.name_full_formatted,e.person_id, ea.end_effective_dt_tm, ea.alias 
+from encntr_alias ea, encounter e, person p
+plan ea
+where ea.alias = "1005100149"
+join e
+where ea.encntr_id = e.encntr_id
+join p
+where p.person_id = e.person_id
+
+;0901600161|010169124
+with maxrec = 100, time = 60
+
+select * from person_alias pa
+where pa.person_id =     6341523.00
+
+	  select ;into "nl:"
+	     cva.code_value,cva.contributor_source_cd,uar_get_code_display(cva.contributor_source_cd), *
+	  from code_value_alias cva
+	  where cva.contributor_source_cd = 188258039;c_src 
+	  
+	  and 
+	               cva.code_set = 26820 ;and
+	;               cva.alias = trim(doc_alias)     ;     c08495
+	              ; cva.alias = "VOUCHER";doc_type)
+	               with maxrec = 100, time = 60
+	   detail
+	      doc_type_cd = cva.code_value
+	   with nocounter
+

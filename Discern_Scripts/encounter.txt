@@ -1,0 +1,10 @@
+	select e.person_id,e.encntr_id,*
+	  from encounter e
+	  where ;e.person_id = 56028085 
+	  ;and  
+	  e.encntr_id = 12906804
+with maxrec = 100, time = 60
+
+
+select * from person p
+where p.person_id =     6341523.00

@@ -1,0 +1,92 @@
+Multiple Aliases:
+---------------------------------
+		select 
+	       		pa.person_id, pa.alias_pool_cd, *
+	     	from person_alias pa
+	     	where pa.alias = "20421045";trim(mrn) 
+	     	;and
+	         ;         pa.alias_pool_cd = 3146565;mrn_pool 
+	       ; and
+	               ;   pa.active_ind = 1
+	        order by pa.person_id
+	     
+Missing Code Value Alias in Contributor System
+--------------------------------------------------------	        
+	  select into "nl:"
+	     cva.code_value
+	  from code_value_alias cva
+	  where cva.contributor_source_cd = c_src and 
+	               cva.code_set = 26820 and
+	;               cva.alias = trim(doc_alias)     ;     c08495
+	               cva.alias = trim(doc_type)	        
+	               
+	;;encntr_id is valid for the personid tied to the MRN in the file
+	if (trim(parent_entity_name) = "ENCOUNTER" and encntr_id > 0.0)
+	select e.encntr_id
+	  from encounter e
+	  where ;e.person_id = 56121358;person_id 
+	  ;and  
+	  e.encntr_id = 19458229 ;encntr_id
+	  
+	  select * from encounter e 
+	  where e.person_id = 56121358
+	  detail
+	    q_encntr_id = e.encntr_id
+	  with nocounter
+	   execute oencpm_msglog(build("q_encntr_id = ",q_encntr_id,char(0)))
+	  if(q_encntr_id <= 0.0)
+	     set bad_rec = 1
+	     set error_text = concat(error_text,"FIN# of ", trim(enctr_nbr), " not valid for MRN# ", trim(mrn),"|")
+	      execute oencpm_msglog(build
+	("************************     FIN / MRN mismatch     ************************",char(0)))
+	      execute oencpm_msglog(build("FIN# of ", trim(enctr_nbr), " not valid for MRN# ", trim(mrn),char(0)))
+	  endif     ;     q_encntr_id
+	endif     ;     person_id,encntr_id
+
+
+---------------------------------------------------------------------------------------
+
+Multiple Aliases:
+---------------------------------
+		select 
+	       		pa.person_id, pa.alias_pool_cd, *
+	     	from person_alias pa
+	     	where pa.alias = "*20907481";trim(mrn) 
+	     	;and
+	         ;         pa.alias_pool_cd = 3146565;mrn_pool 
+	       ; and
+	               ;   pa.active_ind = 1
+	        order by pa.person_id
+	     
+Missing Code Value Alias in Contributor System
+--------------------------------------------------------	        
+	  select into "nl:"
+	     cva.code_value
+	  from code_value_alias cva
+	  where cva.contributor_source_cd = c_src and 
+	               cva.code_set = 26820 and
+	;               cva.alias = trim(doc_alias)     ;     c08495
+	               cva.alias = trim(doc_type)	        
+	               
+	;;encntr_id is valid for the personid tied to the MRN in the file
+	if (trim(parent_entity_name) = "ENCOUNTER" and encntr_id > 0.0)
+	select e.encntr_id
+	  from encounter e
+	  where ;e.person_id = 56121358;person_id 
+	  ;and  
+	  e.encntr_id = 19458229 ;encntr_id
+	  
+	  select * from encounter e 
+	  where e.person_id = 56121358
+	  detail
+	    q_encntr_id = e.encntr_id
+	  with nocounter
+	   execute oencpm_msglog(build("q_encntr_id = ",q_encntr_id,char(0)))
+	  if(q_encntr_id <= 0.0)
+	     set bad_rec = 1
+	     set error_text = concat(error_text,"FIN# of ", trim(enctr_nbr), " not valid for MRN# ", trim(mrn),"|")
+	      execute oencpm_msglog(build
+	("************************     FIN / MRN mismatch     ************************",char(0)))
+	      execute oencpm_msglog(build("FIN# of ", trim(enctr_nbr), " not valid for MRN# ", trim(mrn),char(0)))
+	  endif     ;     q_encntr_id
+	endif     ;     person_id,encntr_id	               	               

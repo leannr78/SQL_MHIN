@@ -1,0 +1,6 @@
+	select ;into "nl:"
+	  br.blob_ref_id,*
+	from blob_reference br
+	where br.blob_handle = "DC28105943.28113386"
+	and br.parent_entity_id = 10813814 
+	and br.parent_entity_name = "PERSON"

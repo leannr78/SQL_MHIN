@@ -1,0 +1,68 @@
+select; into $1 
+     FIN = ea.alias,
+     MRN = PA.ALIAS,
+     PTNAME = p.name_full_formatted,
+     en.REG_DT_TM,
+     EN_LOC_BUILDING_DISP = UAR_GET_CODE_DISPLAY( en.LOC_BUILDING_CD ),
+     EN_LOC_FACILITY_DISP = UAR_GET_CODE_DISPLAY( en.LOC_FACILITY_CD ),
+     EN_LOC_NURSE_UNIT_DISP = UAR_GET_CODE_DISPLAY( en.LOC_NURSE_UNIT_CD ),
+     I.CHARGE_DESCRIPTION,
+     I.CHARGE_ITEM_ID,
+     I_CHARGE_TYPE_DISP = UAR_GET_CODE_DISPLAY( I.CHARGE_TYPE_CD ),
+     I_ENCNTR_TYPE_DISP = UAR_GET_CODE_DISPLAY( I.ENCNTR_TYPE_CD ),
+     I.PRIM_CPT,
+     I.PRIM_CPT_DESC,
+     I.ACTIVE_STATUS_DT_TM,
+     C.ACTIVITY_DT_TM,
+     C.SERVICE_DT_TM,
+     C_TIER_GROUP_DISP = UAR_GET_CODE_DISPLAY( C.TIER_GROUP_CD ),
+     I.PRICE,
+     C.DISCOUNT_AMOUNT,
+     C.GROSS_PRICE,
+     C.ITEM_EXTENDED_PRICE,
+     C.ITEM_PRICE,
+     C.ITEM_QUANTITY,
+     C_CHARGE_TYPE_DISP = UAR_GET_CODE_DISPLAY( C.CHARGE_TYPE_CD ),
+     I.PRIM_CDM,
+     elh.activity_dt_tm, elh.*
+
+FROM
+     encounter  en,
+     encntr_alias  ea,
+     person  p,
+     PERSON_ALIAS  PA,
+     INTERFACE_CHARGE  I,
+     CHARGE  C,
+     encntr_loc_hist elh
+
+plan en
+where en.active_ind = 1
+  and en.reg_dt_tm BETWEEN cnvtdatetime("1-sep-2016 23:59:59")
+                           AND cnvtdatetime("30-sep-2016 23:59:59")
+ join ea
+where EA.encntr_id  = EN.encntr_id
+
+join p
+where p.person_id = en.person_id
+  and p.active_ind =1
+
+ join PA
+where PA.person_id  = en.person_id
+and pa.alias in ("21065680","21060657")
+
+ join I
+where i.active_ind =1
+  and i.encntr_id = en.encntr_id
+  
+ join c
+where c.active_ind =1
+  and c.charge_item_id = i.charge_item_id
+  and c.activity_dt_tm BETWEEN cnvtdatetime("1-sep-2016 23:59:59")
+                           AND cnvtdatetime("30-sep-2016 23:59:59")
+
+join elh
+where elh.encntr_id = en.encntr_id
+ and c.activity_dt_tm between elh.beg_effective_dt_tm and elh.end_effective_dt_tm
+
+
+WITH time = 60, maxcol = 400 , landscape,   format;, SKIPREPORT=1

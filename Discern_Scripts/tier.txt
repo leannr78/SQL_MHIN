@@ -1,0 +1,20 @@
+SELECT
+	T_TIER_GROUP_DISP = UAR_GET_CODE_DISPLAY(T.TIER_GROUP_CD)
+	, T_TIER_CELL_TYPE_DISP = UAR_GET_CODE_DISPLAY(T.TIER_CELL_TYPE_CD)
+	, t.ACTIVE_IND
+	, t.TIER_CELL_VALUE_ID
+	, ps.PRICE_SCHED_ID
+	, ps.PRICE_SCHED_DESC
+	, ps.ACTIVE_IND
+	, ps.MIN_PRICE
+
+FROM
+	tier_matrix   t
+	, price_sched   ps
+
+plan t 
+where t.active_ind = 1
+and t.tier_cell_type_cd = 3600
+join ps where ps.price_sched_id = t.tier_cell_value
+
+WITH MAXREC = 100, nocounter, separator="", format

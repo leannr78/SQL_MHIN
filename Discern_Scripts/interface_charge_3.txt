@@ -1,0 +1,39 @@
+select  
+ ic.charge_item_id  
+ , c.bill_item_id  
+ , c.charge_description  
+ , parent_cont = uar_get_code_display(bi.ext_parent_contributor_cd)  
+ , child_cont = uar_get_code_display(bi.ext_child_contributor_cd)  
+ , dta.mnemonic  
+ , cdm = bim.key6  
+  
+from interface_charge ic  
+ , charge c  
+ , bill_item bi  
+ , discrete_task_assay dta  
+ , bill_item_modifier bim  
+  
+plan ic  
+where ic.posted_dt_tm > cnvtdatetime("3-OCT-2016 23:59:59")  
+and ic.active_ind = 1  
+and ic.end_effective_dt_tm > sysdate  
+;and ic.facility_cd = 11967922  
+join c  
+where c.charge_item_id = ic.charge_item_id  
+join bi  
+where bi.bill_item_id = c.bill_item_id  
+and bi.active_ind = 1  
+and bi.end_effective_dt_tm > sysdate  
+join dta  
+where dta.task_assay_cd = bi.ext_child_reference_id  
+join bim  
+where bim.bill_item_id = bi.bill_item_id  
+and bim.key1_id = (select tm.tier_cell_value_id  
+     from tier_matrix tm  
+     where tm.tier_group_cd = c.tier_group_cd  
+     and tm.tier_cell_type_cd = 3580.00);CDM_SCHED  
+       
+order by  
+ ic.charge_item_id  
+  
+with format, time = 60, maxrec = 100, separator = " "  

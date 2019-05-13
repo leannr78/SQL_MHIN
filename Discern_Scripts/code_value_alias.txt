@@ -1,0 +1,4 @@
+select * from code_value_alias cva
+where cva.alias = "KARDEX"
+and cva.code_set = 26820
+

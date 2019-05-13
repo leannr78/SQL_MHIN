@@ -1,0 +1,61 @@
+select
+ ic.charge_item_id
+ , c.bill_item_id
+ , c.charge_description
+ , parent_cont = uar_get_code_display(bi.ext_parent_contributor_cd)
+ , child_cont = uar_get_code_display(bi.ext_child_contributor_cd)
+ , dta.mnemonic
+ , cdm = bim.key6
+ , form_ref_id = dfa.dcp_forms_ref_id
+ , form = dfa.description
+
+from interface_charge ic
+ , charge c
+ , bill_item bi
+ , discrete_task_assay dta
+ , bill_item_modifier bim
+ , clinical_event ce
+ , clinical_event section
+ , clinical_event cev
+ , dcp_forms_activity_comp dfac
+ , dcp_forms_activity dfa
+
+plan ic
+where ic.posted_dt_tm > cnvtdatetime("1-sep-2016 23:59:59")
+and ic.active_ind = 1
+and ic.end_effective_dt_tm > sysdate
+and ic.fin_nbr = "1625801926"
+join c
+where c.charge_item_id = ic.charge_item_id
+join bi
+where bi.bill_item_id = c.bill_item_id
+and bi.active_ind = 1
+and bi.end_effective_dt_tm > sysdate
+join dta
+where dta.task_assay_cd = bi.ext_child_reference_id
+join bim
+where bim.bill_item_id = bi.bill_item_id
+and bim.key1_id = (select tm.tier_cell_value_id
+     from tier_matrix tm
+     where tm.tier_group_cd = c.tier_group_cd
+     and tm.tier_cell_type_cd = 3580.00);CDM_SCHED
+join ce
+where ce.encntr_id = c.encntr_id
+and ce.valid_until_dt_tm > sysdate
+and dta.task_assay_cd != 0
+join section
+where section.event_id = ce.parent_event_id
+and section.valid_until_dt_tm > sysdate
+join cev
+where cev.event_id = section.parent_event_id
+and cev.valid_until_dt_tm > sysdate
+join dfac
+where dfac.parent_entity_id = cev.event_id
+and dfac.parent_entity_name like "CLINICAL_EVENT"
+join dfa
+where dfa.dcp_forms_activity_id = dfac.dcp_forms_activity_id
+     
+order by
+ ic.charge_item_id
+
+with format, time = 60, separator = " ", maxrec = 100
